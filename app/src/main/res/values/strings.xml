@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">Amapilot</string>
+    <string name="privacy_title">隐私政策</string>
+    <string name="privacy_body">Amapilot 集成高德开放平台 SDK，提供地图、定位与导航服务。同意后，我们将按照《高德地图隐私权政策》收集和处理设备标识、位置等信息，用于提供导航服务。详见：https://lbs.amap.com/pages/privacy/</string>
+    <string name="privacy_agree">同意并继续</string>
+    <string name="privacy_disagree">不同意并退出</string>
+    <string name="car_welcome">Amapilot 已就绪</string>
+    <string name="ok">确定</string>
+    <string name="settings_title">设置</string>
+    <string name="share_unsupported">暂不支持的分享格式</string>
+</resources>

@@ -1,0 +1,19 @@
+*.iml
+.gradle
+/local.properties
+/.idea
+.DS_Store
+/build
+/app/build
+/captures
+.externalNativeBuild
+.cxx
+keystores/*.keystore
+.github/RELEASE_KEYSTORE_BASE64.txt
+.kotlin/
+*.so
+# 高德 SDK 二进制不入库（协议 4.12.8），构建前由 scripts/fetch-amap-sdk.sh 拉取
+app/libs/AMap3DMap*.jar
+
+# OpenCode 会话目录（本地工具产物）
+.opencode/

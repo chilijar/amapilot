@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 车机顶栏动作：选择路线（分岔） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="2"
+        android:strokeLineCap="round" android:fillColor="#00000000"
+        android:pathData="M12,22 L12,14 M12,14 C12,10.5 8.5,10 6.5,6.5 M12,14 C12,10.5 15.5,10 17.5,6.5 M6.5,6.5 L4.2,7.4 M6.5,6.5 L7.6,8.9 M17.5,6.5 L16.4,8.9 M17.5,6.5 L19.8,7.4" />
+</vector>

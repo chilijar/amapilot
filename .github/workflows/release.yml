@@ -1,0 +1,85 @@
+name: Release Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build & Release APK + AAB
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Fetch AMap SDK
+        uses: ./.github/actions/setup-sdk
+
+      - name: Decode release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::warning::RELEASE_KEYSTORE_BASE64 not set — release will be UNSIGNED"
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > $HOME/release.keystore
+          echo "RELEASE_KEYSTORE_PATH=$HOME/release.keystore" >> "$GITHUB_ENV"
+
+      - name: Build release APK & AAB
+        # 注意：不注入 AMAP_API_KEY——Release 产物零内置 key（key 架构 B：
+        # 用户在高德开放平台自申请自持，直接与高德缔约；本地构建仍可经
+        # local.properties 注入）。构建时 manifestPlaceholders 兜底空串，构建不受影响
+        env:
+          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: ./gradlew assembleRelease bundleRelease
+
+      - name: Extract version
+        if: startsWith(github.ref, 'refs/tags/')
+        id: ver
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Extract version (manual)
+        if: github.event_name == 'workflow_dispatch'
+        id: verm
+        run: echo "version=$(grep versionName app/build.gradle.kts | sed 's/.*"\(.*\)"/\1/')" >> "$GITHUB_OUTPUT"
+
+      - name: Rename artifacts
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}${{ steps.verm.outputs.version }}"
+          mv app/build/outputs/apk/release/app-release.apk "amapilot-${VERSION}-arm64.apk"
+          mv app/build/outputs/bundle/release/app-release.aab "amapilot-${VERSION}-release.aab"
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            amapilot-*.apk
+            amapilot-*.aab
+
+      - name: Upload artifact (manual run)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: amapilot-release
+          path: |
+            amapilot-*.apk
+            amapilot-*.aab

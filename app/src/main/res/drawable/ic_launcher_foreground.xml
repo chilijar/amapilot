@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M39,82 L52,59"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="7"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M69,82 L56,59"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="7"
+        android:strokeLineCap="round" />
+    <!-- Pin：头圆+尾三角同向（顺时针，nonZero 并集无缝合并），中心孔反向（逆时针）镂空透出背景渐变 -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M42,41 a12,12 0 1,1 24,0 a12,12 0 1,1 -24,0 Z M45,47 L63,47 L54,59 Z M49.5,41 a4.5,4.5 0 1,0 9,0 a4.5,4.5 0 1,0 -9,0 Z" />
+</vector>

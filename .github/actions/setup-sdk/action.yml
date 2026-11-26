@@ -1,0 +1,23 @@
+name: Fetch AMap SDK
+description: >-
+  高德一体包 SDK 不入库（高德协议 4.12.8 再分发限制，
+  见 docs/OPEN_SOURCE_COMPLIANCE.md P0-1），构建前拉取到
+  app/libs/ 与 app/src/main/jniLibs/arm64-v8a/。
+  正确性由 scripts/fetch-amap-sdk.sh 的 md5 pin 保证，cache 仅作加速：
+  即使命中过期 cache，脚本校验不匹配也会自动重拉。
+
+runs:
+  using: composite
+  steps:
+    - name: Cache AMap SDK
+      uses: actions/cache@v4
+      with:
+        # 与 scripts/fetch-amap-sdk.sh 的 EXPECTED_ZIP_MD5 保持同步（升级时两处一起改）
+        key: amap-sdk-66bb15c096b1527609a8d1580d8ec760
+        path: |
+          app/libs
+          app/src/main/jniLibs/arm64-v8a
+
+    - name: Fetch SDK (idempotent)
+      shell: bash
+      run: ./scripts/fetch-amap-sdk.sh
