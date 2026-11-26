@@ -492,7 +492,7 @@ system_server 被压死（`DeadSystemException`）；gearhead 被杀（X connect
 - `docs/CAR_UI_DESIGN.md` — 车机 UI 规格（布局/坐标/路线渲染/相机/车道）
 - `docs/SIM_ENV_SETUP.md` — 模拟器 + DHU 环境搭建与迁移清单
 - `docs/PLAY_UPLOAD_GUIDE.md` — Play 内部测试轨道上传手册
-- `docs/OPEN_SOURCE_COMPLIANCE.md` — 开源合规盘点（GPL × 高德协议）
+- `docs/OPEN_SOURCE_COMPLIANCE.md` — 开源合规盘点（历史 GPL 分析 + Apache-2.0 换证决策）
 
 外部：[高德 Android SDK](https://lbs.amap.com/api/android-sdk/overview) ·
 [Android Auto](https://developer.android.com/training/cars/apps)

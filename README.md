@@ -117,4 +117,9 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 ## 许可
 
-[GPL-3.0](LICENSE)。高德地图 SDK 的使用受[高德开放平台服务协议](https://lbs.amap.com/home/terms/)约束。
+[Apache-2.0](LICENSE)。本项目与高德开放平台无隶属或背书关系；高德地图 SDK 的使用受
+[高德开放平台服务协议](https://lbs.amap.com/home/terms/)约束（构建时自行下载，需自行接受其条款）。
+
+## 贡献
+
+欢迎 issue 与 PR：见[贡献指南](CONTRIBUTING.md)；安全漏洞请走[私有上报渠道](SECURITY.md)。
