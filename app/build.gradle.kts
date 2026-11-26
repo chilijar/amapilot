@@ -26,7 +26,8 @@ fun unifiedSigningConfig(android: com.android.build.gradle.BaseExtension) {
             storeFile = file(storePath)
             storePassword = storePass
             this.keyAlias = alias
-            this.keyPassword = keyPass ?: storePass
+            // 空/缺省时回退到 store 密码（PKCS12 keystore 的 key 密码恒等于 store 密码）
+            this.keyPassword = keyPass?.takeIf { it.isNotBlank() } ?: storePass
         } else {
             // 仓库默认 keystore（与 AMap key 绑定的 SHA1 一致）
             val fallback = rootProject.file("keystores/release.keystore")
