@@ -1,0 +1,28 @@
+name: 功能建议
+description: 提出一个新功能或改进
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 想解决什么问题
+      description: 先说场景与痛点，而不是方案
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议的方案
+      description: 期望的交互/行为；若有参考（Google Maps、OsmAnd 等）可附截图
+    validations:
+      required: true
+  - type: dropdown
+    id: scope
+    attributes:
+      label: 影响端
+      options:
+        - 手机端
+        - Android Auto 车机端
+        - 两端
+    validations:
+      required: true
