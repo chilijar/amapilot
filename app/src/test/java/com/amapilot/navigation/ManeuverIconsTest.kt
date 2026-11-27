@@ -69,12 +69,12 @@ class ManeuverIconsTest {
         fun accents(spec: LaneIconSpec, dir: LaneDir) =
             collectColors(spec.build(setOf(dir), accent, inactive).root).count { it == accent }
 
-        // fork：直行路径 + 底杆；左/右分支 + 底杆
+        // fork：直行路径 + 底杆；下移头 + 弧线臂 + 底杆
         assertEquals(2, accents(ManeuverIcons.ForkLeft, LaneDir.STRAIGHT))
-        assertEquals(2, accents(ManeuverIcons.ForkLeft, LaneDir.LEFT))
+        assertEquals(3, accents(ManeuverIcons.ForkLeft, LaneDir.LEFT))
         assertEquals(0, accents(ManeuverIcons.ForkLeft, LaneDir.RIGHT))
         assertEquals(2, accents(ManeuverIcons.ForkRight, LaneDir.STRAIGHT))
-        assertEquals(2, accents(ManeuverIcons.ForkRight, LaneDir.RIGHT))
+        assertEquals(3, accents(ManeuverIcons.ForkRight, LaneDir.RIGHT))
         // 45° 变体：直行路径 + 底杆；斜分支 + 箭头 + 底杆
         assertEquals(2, accents(ManeuverIcons.ForkRightSlight, LaneDir.STRAIGHT))
         assertEquals(3, accents(ManeuverIcons.ForkRightSlight, LaneDir.RIGHT))

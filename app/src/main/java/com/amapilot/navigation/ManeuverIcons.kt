@@ -10,7 +10,7 @@ import androidx.compose.ui.graphics.vector.group
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
 
-// ---- 车道图标路径（24×24，3px 杆，Material 45° 尾翼） ----
+// ---- 车道图标路径（24×24；fill 剪影杆 2/24，stroke 部件 2.2px 对齐） ----
 
 /** 车道方向（组合图标内逐方向着色：需走的方向高亮，其余灰色）。 */
 enum class LaneDir { STRAIGHT, LEFT, RIGHT, UTURN_LEFT, UTURN_RIGHT }
@@ -38,7 +38,8 @@ class LaneIconSpec(val name: String, val parts: List<LanePart>) {
             viewportWidth = 24f,
             viewportHeight = 24f
         ).apply {
-            // 命中方向最后绘制；共享主干再压在最上层，保证两个方向都“踩”到的底端主杆高亮
+            // 层序：非active → active → 共享主干最上（两方向都"踩"到的底端主杆高亮）；
+            // stroke 臂**后画**坐在 fill 杆上（衔接连续），杆宽 2.2 对齐剪影 2/24 杆
             val used = active.isNotEmpty() && parts.any { it.dir != null && it.dir in active }
             parts.sortedBy { p ->
                 when {
@@ -61,8 +62,9 @@ class LaneIconSpec(val name: String, val parts: List<LanePart>) {
                         pathData = PathParser().parsePathString(p.d).toNodes(),
                         fill = if (p.fill) SolidColor(color) else null,
                         stroke = if (p.stroke) SolidColor(color) else null,
-                        // stroke 部件杆宽：与 fill 剪影的 2/24 杆视觉等重（3/24 ≈ 剪影+抗锯齿占位）
-                        strokeLineWidth = if (p.stroke) 3f else 0f,
+                        // 杆宽对齐 fill 剪影的 2/24 杆（+0.2 补 stroke 中心线的
+                        // 抗锯齿视觉损耗），多向箭头内两种部件粗细一致
+                        strokeLineWidth = if (p.stroke) 2.2f else 0f,
                         strokeLineCap = StrokeCap.Butt,
                         strokeLineJoin = StrokeJoin.Round
                     )
@@ -93,31 +95,20 @@ private const val UTURN_RIGHT_D =
         "l-1.59,-1.59 L13,13 l4,4 l4,-4 l-1.41,-1.41 L18,13.17 V9 " +
         "c0,-3.31 -2.69,-6 -6,-6 s-6,2.69 -6,6 z"
 
-/** 官方 fork_left 的左分支（与右移 2 的 straight 拼出官方 fork_left）。 */
-private const val FORK_LEFT_BRANCH_D =
-    "M9.41,15.59 L8,17 L4,13 L8,9 L9.41,10.41 L7.83,12 " +
-        "C9.34,11.67 11.56,12.08 13,13.36 L13,17 " +
-        "C12.27,14.42 9.93,13.53 7.83,14 Z"
+/** 直行+左转/右转与直行+左前方/右前方的共享底杆：fork 官方 trunk 顶 13.36 是
+ *  fill 分支的衔接位，不适用 stroke 分支（分界线上移成裸段）。 */
+private const val FORK_SLIGHT_TRUNK_L_D = "M13,15 L13,21 L15,21 L15,15 Z"
+private const val FORK_SLIGHT_TRUNK_R_D = "M9,15 L9,21 L11,21 L11,15 Z"
 
-/** 官方 fork_right 的右分支（与左移 2 的 straight 拼出官方 fork_right）。 */
-private const val FORK_RIGHT_BRANCH_D =
-    "M14.59,15.59 L16,17 L20,13 L16,9 L14.59,10.41 L16.17,12 " +
-        "C14.66,11.67 12.44,12.08 11,13.36 L11,17 " +
-        "C11.73,14.42 14.07,13.53 16.17,14 Z"
-
-/** fork 车道的共享底杆（[LanePart.dir] = null）：任一方向高亮时一起点亮。 */
-private const val FORK_LEFT_TRUNK_D = "M13,13.36 L13,21 L15,21 L15,13.36 Z"
-
-/** fork_right 的共享底杆（直行杆 x=9..11）。 */
-private const val FORK_RIGHT_TRUNK_D = "M9,13.36 L9,21 L11,21 L11,13.36 Z"
-
-/** 右前方 45° 分岔（maneuver = RIGHT_FRONT 时替换 fork_right 分支）。 */
-private const val SLIGHT_BRANCH_R_D = "M10,15 L16.3,9.5"
+/** 右前方 45° 分岔（maneuver = RIGHT_FRONT 时替换 fork_right 分支）：主体 41°
+ *  斜段 + 末端近垂直深入杆内 (10,16)——端部接缝落蓝 trunk 区被同色遮盖（与
+ *  SLR/LR 臂同构）；端头圆角从杆顶岔出，不侵入灰杆、不出杆右缘。 */
+private const val SLIGHT_BRANCH_R_D = "M16.5,9.5 C14.5,11.2 10.8,14.2 10,16"
 private const val SLIGHT_HEAD_R_D =
     "M18.23,7.57 L18.23,13.23 L15.54,10.26 L12.57,7.57 Z"
 
-/** 左前方（45° 分岔，[SLIGHT_BRANCH_R_D] 镜像）。 */
-private const val SLIGHT_BRANCH_L_D = "M14,15 L7.7,9.5"
+/** 左前方（45° 分岔，[SLIGHT_BRANCH_R_D] 镜像，末端深入 (14,16)）。 */
+private const val SLIGHT_BRANCH_L_D = "M7.5,9.5 C9.5,11.2 13.2,14.2 14,16"
 private const val SLIGHT_HEAD_L_D =
     "M5.77,7.57 L5.77,13.23 L8.46,10.26 L11.43,7.57 Z"
 
@@ -127,10 +118,19 @@ private const val LR_HEAD_L_D =
 private const val LR_HEAD_R_D =
     "M17.17,11 L15.58,12.59 L17,14 L21,10 L17,6 L15.59,7.41 L17.17,9 Z"
 
-/** 左转+右转的左臂（stroke 部件，平滑收进主杆）。 */
-private const val LR_ARM_L_D = "M6.83,10 L7,10 C10,10 12,12 12,15 L12,21"
+/** 左转+右转的左臂（stroke 部件，平滑收进主杆）；竖段归共享杆 [SHARED_TRUNK_D]。 */
+private const val LR_ARM_L_D = "M6.83,10 L7,10 C10,10 12,12 12,15"
 
-private const val LR_ARM_R_D = "M17.17,10 L17,10 C14,10 12,12 12,15 L12,21"
+private const val LR_ARM_R_D = "M17.17,10 L17,10 C14,10 12,12 12,15"
+
+/** 直行杆截短形态（杆止于分岔口 y=15，底段归 [SHARED_TRUNK_D]）：
+ *  StraightLeftRight 用，与 ForkLeft 拆 FORK_LEFT_TRUNK 同构。 */
+private const val SLR_STRAIGHT_D =
+    "M11,6.83 L9.41,8.41 L8,7 L12,3 L16,7 L14.59,8.41 L13,6.83 L13,15 L11,15 Z"
+
+/** 共享竖杆（y=15..21，宽 2/24 对齐直行杆）：两臂在杆顶 (12,15) 岔出；
+ *  LeftRight / StraightLeftRight 共用，随任一高亮方向点亮（路径必经段）。 */
+private const val SHARED_TRUNK_D = "M11,15 L11,21 L13,21 L13,15 Z"
 
 private const val U_LOOP_BIG_D =
     "M13,15 V14 A4,4 0 0 0 5,14 V15.5 H7 V14 A2,2 0 0 1 11,14 V15 Z"
@@ -142,6 +142,36 @@ private const val U_HEAD_DOWN_D =
 private const val SUT_LEFT_TRUNK_D = "M13,15 L13,21 L15,21 L15,15 Z"
 private const val SUT_RIGHT_TRUNK_D = "M9,15 L9,21 L11,21 L11,15 Z"
 
+/** 单方向 45°（slight 单向版）斜顶杆：顶边沿 41° 与臂主体平行。臂对侧没有
+ *  直行杆对接（双向 fork 平顶承载灰杆底，单向平顶则是凭空水平凸台），斜切
+ *  与臂的斜向一致，杆是臂的连续延伸。分岔口 (13,12.6)——竖杆左右缘高
+ *  8.4/6.6，与斜段长度均衡（用户定稿 v11 上下比例）。 */
+private const val SLIGHT_LANE_TRUNK_L_D = "M13,12.6 L15,14.4 L15,21 L13,21 Z"
+private const val SLIGHT_LANE_TRUNK_R_D = "M11,12.6 L9,14.4 L9,21 L11,21 Z"
+
+/** 单方向 45° 斜臂（slight 单向版，[SLIGHT_BRANCH_L_D] 的短臂变体）：主体 41°
+ *  + 末端近垂直深入斜顶杆下 (14,15)——分岔点上移使竖杆更长、斜段更短，
+ *  与 [SLIGHT_LANE_TRUNK_L_D] 配套；双向 fork 版臂端深入更深 (14,16) 不可混用。 */
+private const val SLIGHT_LANE_BRANCH_L_D = "M7.5,9.5 C9.5,11.2 13.2,13.6 14,15"
+private const val SLIGHT_LANE_BRANCH_R_D = "M16.5,9.5 C14.5,11.2 10.8,13.6 10,15"
+
+/** 直行+左转头（[LR_HEAD_L_D] 下移 2：分岔口低、体量紧凑不偏上——v12 偏上
+ *  的修正；用户定稿头位）。 */
+private const val FORK_HEAD_L_D =
+    "M6.83,13 l1.59,1.59 L7,16 l-4,-4 l4,-4 l1.41,1.41 L6.83,11"
+private const val FORK_HEAD_R_D =
+    "M17.17,13 l-1.59,1.59 L17,16 l4,-4 l-4,-4 l-1.41,1.41 L17.17,11"
+
+/** 直行+左/右转弧线臂（等宽 stroke，用户定稿"原先弧线"形态）：从下移头右端
+ *  全宽弧线下行、**末端近垂直深入** trunk 顶下 (13,16)——垂直段盖满杆顶全宽
+ *  （分岔口无外露水平段=无平台），弧主体下缘落在杆左缘上方（杆外无悬空碎块）。 */
+private const val FORK_ARM_L_D = "M6.83,12 L7,12 C10.5,12.3 12.5,13.8 13,16"
+private const val FORK_ARM_R_D = "M17.17,12 L17,12 C13.5,12.3 11.5,13.8 11,16"
+
+/** 直行+左/右转共享杆（平顶 y15，宽 2 同直行杆——无加宽段；垂直臂段盖满顶）。 */
+private const val FORK_TRUNK_L_D = "M12,15 L12,21 L14,21 L14,15 Z"
+private const val FORK_TRUNK_R_D = "M10,15 L10,21 L12,21 L12,15 Z"
+
 // ---- 直行+左转+右转：直行箭头 + 左右平滑 Y 臂（臂高 y=13） ----
 
 private const val SLR_HEAD_L_D =
@@ -150,9 +180,12 @@ private const val SLR_HEAD_L_D =
 private const val SLR_HEAD_R_D =
     "M17.17,14 L15.58,15.59 L17,17 L21,13 L17,9 L15.59,10.41 L17.17,12 Z"
 
-private const val SLR_ARM_L_D = "M6.83,13 L7,13 C10,13 12,15 12,18 L12,21"
+/** 左臂：端点深入共享杆内 (12,16)、端切线近垂直——Butt 平头近水平且整体落在
+ *  蓝 trunk 区（同色遮盖接缝，消除臂-杆交界的中断感；与 LR 臂端点中点深入
+ *  的构造同构，行 4 与行 3 的分岔形态一致）。 */
+private const val SLR_ARM_L_D = "M6.83,13 L7,13 C10,13 11.5,13.5 12,16"
 
-private const val SLR_ARM_R_D = "M17.17,13 L17,13 C14,13 12,15 12,18 L12,21"
+private const val SLR_ARM_R_D = "M17.17,13 L17,13 C14,13 12.5,13.5 12,16"
 
 // ---- 左转+左掉头：参考路标结构，Material 曲线 ----
 
@@ -555,23 +588,26 @@ object ManeuverIcons {
     val UTurnRightLane =
         LaneIconSpec("UTurnRightLane", listOf(LanePart(LaneDir.UTURN_RIGHT, UTURN_RIGHT_D)))
 
-    /** 直行 + 左转（官方 fork_left 拆成两条路径，便于分别着色）。 */
+    /** 直行 + 左转：下移头 + 等宽弧线臂穿分岔口深入共享杆（弧线换色边界，
+     *  无水平顶——用户定稿 v16）。 */
     val ForkLeft = LaneIconSpec(
         "ForkLeft",
         listOf(
-            LanePart(LaneDir.STRAIGHT, STRAIGHT_D, dx = 2f),
-            LanePart(LaneDir.LEFT, FORK_LEFT_BRANCH_D),
-            LanePart(null, FORK_LEFT_TRUNK_D)
+            LanePart(LaneDir.STRAIGHT, SLR_STRAIGHT_D, dx = 1f),
+            LanePart(LaneDir.LEFT, FORK_HEAD_L_D),
+            LanePart(LaneDir.LEFT, FORK_ARM_L_D, fill = false, stroke = true),
+            LanePart(null, FORK_TRUNK_L_D)
         )
     )
 
-    /** 直行 + 右转（官方 fork_right 拆分）。 */
+    /** 直行 + 右转（[ForkLeft] 镜像）。 */
     val ForkRight = LaneIconSpec(
         "ForkRight",
         listOf(
-            LanePart(LaneDir.STRAIGHT, STRAIGHT_D, dx = -2f),
-            LanePart(LaneDir.RIGHT, FORK_RIGHT_BRANCH_D),
-            LanePart(null, FORK_RIGHT_TRUNK_D)
+            LanePart(LaneDir.STRAIGHT, SLR_STRAIGHT_D, dx = -1f),
+            LanePart(LaneDir.RIGHT, FORK_HEAD_R_D),
+            LanePart(LaneDir.RIGHT, FORK_ARM_R_D, fill = false, stroke = true),
+            LanePart(null, FORK_TRUNK_R_D)
         )
     )
 
@@ -582,7 +618,7 @@ object ManeuverIcons {
             LanePart(LaneDir.STRAIGHT, STRAIGHT_D, dx = -2f),
             LanePart(LaneDir.RIGHT, SLIGHT_BRANCH_R_D, fill = false, stroke = true),
             LanePart(LaneDir.RIGHT, SLIGHT_HEAD_R_D),
-            LanePart(null, FORK_RIGHT_TRUNK_D)
+            LanePart(null, FORK_SLIGHT_TRUNK_R_D)
         )
     )
 
@@ -593,38 +629,39 @@ object ManeuverIcons {
             LanePart(LaneDir.STRAIGHT, STRAIGHT_D, dx = 2f),
             LanePart(LaneDir.LEFT, SLIGHT_BRANCH_L_D, fill = false, stroke = true),
             LanePart(LaneDir.LEFT, SLIGHT_HEAD_L_D),
-            LanePart(null, FORK_LEFT_TRUNK_D)
+            LanePart(null, FORK_SLIGHT_TRUNK_L_D)
         )
     )
 
-    /** 纯右前方车道（45°）：仅用于 maneuver = RIGHT_FRONT。 */
+    /** 纯右前方车道（45°）：斜顶杆 = 臂的连续延伸（[SlightLeftLane] 镜像）。 */
     val SlightRightLane = LaneIconSpec(
         "SlightRightLane",
         listOf(
-            LanePart(LaneDir.RIGHT, FORK_RIGHT_TRUNK_D),
-            LanePart(LaneDir.RIGHT, SLIGHT_BRANCH_R_D, fill = false, stroke = true),
+            LanePart(LaneDir.RIGHT, SLIGHT_LANE_TRUNK_R_D),
+            LanePart(LaneDir.RIGHT, SLIGHT_LANE_BRANCH_R_D, fill = false, stroke = true),
             LanePart(LaneDir.RIGHT, SLIGHT_HEAD_R_D)
         )
     )
 
-    /** 纯左前方车道（45°）：仅用于 maneuver = LEFT_FRONT。 */
+    /** 纯左前方车道（45°）：斜顶杆 = 臂的连续延伸（分岔点上移、竖杆/斜段均衡）。 */
     val SlightLeftLane = LaneIconSpec(
         "SlightLeftLane",
         listOf(
-            LanePart(LaneDir.LEFT, FORK_LEFT_TRUNK_D),
-            LanePart(LaneDir.LEFT, SLIGHT_BRANCH_L_D, fill = false, stroke = true),
+            LanePart(LaneDir.LEFT, SLIGHT_LANE_TRUNK_L_D),
+            LanePart(LaneDir.LEFT, SLIGHT_LANE_BRANCH_L_D, fill = false, stroke = true),
             LanePart(LaneDir.LEFT, SLIGHT_HEAD_L_D)
         )
     )
 
-    /** 左转 + 右转：平滑 Y 形。 */
+    /** 左转 + 右转：共享竖杆上的 Y 形（两臂自杆顶 (12,15) 岔出，杆随任一方向高亮）。 */
     val LeftRight = LaneIconSpec(
         "LeftRight",
         listOf(
             LanePart(LaneDir.LEFT, LR_HEAD_L_D),
             LanePart(LaneDir.RIGHT, LR_HEAD_R_D),
             LanePart(LaneDir.LEFT, LR_ARM_L_D, fill = false, stroke = true),
-            LanePart(LaneDir.RIGHT, LR_ARM_R_D, fill = false, stroke = true)
+            LanePart(LaneDir.RIGHT, LR_ARM_R_D, fill = false, stroke = true),
+            LanePart(null, SHARED_TRUNK_D)
         )
     )
 
@@ -671,14 +708,17 @@ object ManeuverIcons {
     )
 
     /** 直行 + 左转 + 右转：直行箭头 + 左右平滑 Y 臂（y=13）。 */
+    /** 直行+左+右：中间直行杆在分岔口 (y=15) 截短、底段共享杆化——高亮任一转向时
+     *  底杆点亮（路径必经段），与 [LeftRight]/ForkLeft 的主干语义一致。 */
     val StraightLeftRight = LaneIconSpec(
         "StraightLeftRight",
         listOf(
-            LanePart(LaneDir.STRAIGHT, STRAIGHT_D),
+            LanePart(LaneDir.STRAIGHT, SLR_STRAIGHT_D),
             LanePart(LaneDir.LEFT, SLR_HEAD_L_D),
             LanePart(LaneDir.RIGHT, SLR_HEAD_R_D),
             LanePart(LaneDir.LEFT, SLR_ARM_L_D, fill = false, stroke = true),
-            LanePart(LaneDir.RIGHT, SLR_ARM_R_D, fill = false, stroke = true)
+            LanePart(LaneDir.RIGHT, SLR_ARM_R_D, fill = false, stroke = true),
+            LanePart(null, SHARED_TRUNK_D)
         )
     )
 
