@@ -91,7 +91,17 @@ app/src/main/java/com/amapilot/
   MainActivity 销毁时 `MapHolder.destroy()`。勿改回每屏自建 + onDispose 销毁。
 - **edge-to-edge**：顶部组件必须 `statusBarsPadding()`（状态栏触摸区吞点击），底部卡片
   `navigationBarsPadding()`。
-- **限速无 API**：限速取自 `updateCameraInfo`（测速摄像头数据），车速环超速判定基于此。
+- **限速无 API**：限速取自电子眼数据（车速环超速判定基于此），无路段级限速流。单点 =
+  `updateCameraInfo` 的 `getCameraSpeed()`（**勿用已废弃的 `getSpeed()` 数组——仅区间类型
+  才有值，旧实现单点限速实际取不到**）；区间测速 = `updateIntervalCameraInfo` 专用回调
+  （第三参是 `CarEnterCameraStatus` UNENTER/ENTER/LEAVE，**不是距离**）。区间语义仅走语音
+  （`GuidanceController`：接近/进入/剩余 1km·500m 梯级/均值超限；文案含"区间测速"→
+  `classifyVoiceText` 优先归 **SPEED_LIMIT 限速提醒开关**管控，单点测速仍归 CAMERA）；
+  **车速环视觉不分区间（用户定稿）**，`limitKmh` 区间激活时 = 区间限速、清除后回落单点池。
+  两边界：**中途汇入只扫到出口**（startCamera=null）→ 区间语义不成立、出口限速降级普通
+  池；**中途驶出**（LEAVE）→ 区间态一律清除（部分路程的均值/剩余保留会误导）。完整进入
+  （先 UNENTER 后 ENTER）`averageKmh` 才可信（SDK 均值跟踪基线）；巡航态无区间回调为 SDK
+  硬边界。
 - **底图字号无 API** → 车机 MapView 几何缩放 `MAP_VIEW_SCALE=0.6`（按 1/SCALE 尺寸布局 +
   pivot(0,0) scaleX/Y），地名缩到接近卡片字号。全部补偿链：线宽 `glw()`、徽标/箭头位图
   ×1/SCALE、`setPointToCenter`/bounds 留白 ÷SCALE、`hitRouteLine` 的 toScreenLocation

@@ -9,7 +9,9 @@ import java.util.Locale
 /**
  * 导航语音播报：系统 TTS 播放引擎广播文本（[com.amap.api.navi.AMapNaviListener.onGetNavigationText]）。
  * 开关实时读设置（[Prefs.isVoiceEnabled]）；重复文本 1 秒内去重（int/String 双回调）。
- * 引擎文本无分类字段，电子眼/限速等按关键词识别（[classifyVoiceText]）分别屏蔽。
+ * 引擎文本无分类字段，电子眼/限速等按关键词识别（[classifyVoiceText]）分别屏蔽；
+ * 区间测速文本优先归限速提醒开关（本质限速管控，单点测速仍归电子眼）——
+ * 与 [GuidanceController] 自研区间合成文案同受 [Prefs.isVoiceSpeedLimitEnabled] 管控。
  */
 object VoiceSpeaker {
 
@@ -25,6 +27,9 @@ object VoiceSpeaker {
     private val CAMERA_KEYWORDS = listOf("拍照", "电子眼", "探头", "测速", "摄像头", "违章")
 
     private val SPEED_KEYWORDS = listOf("限速", "超速")
+
+    /** 区间测速文本（优先于 [CAMERA_KEYWORDS] 的"测速"命中，归限速提醒管控）。 */
+    private val INTERVAL_PATTERN = Regex("区间测速|区间限速")
 
     private val LANE_KEYWORDS = listOf("车道")
 
@@ -121,8 +126,9 @@ object VoiceSpeaker {
         lastText = ""
     }
 
-    /** 按关键词分类播报文本（电子眼优先于限速，含"测速"归电子眼）。 */
+    /** 按关键词分类播报文本（区间测速 → 限速提醒优先；单点电子眼其次；含"测速"归电子眼）。 */
     internal fun classifyVoiceText(text: String): VoiceCategory = when {
+        INTERVAL_PATTERN.containsMatchIn(text) -> VoiceCategory.SPEED_LIMIT
         CAMERA_KEYWORDS.any { text.contains(it) } -> VoiceCategory.CAMERA
         SPEED_KEYWORDS.any { text.contains(it) } -> VoiceCategory.SPEED_LIMIT
         LANE_KEYWORDS.any { text.contains(it) } &&

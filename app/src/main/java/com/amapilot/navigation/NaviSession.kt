@@ -4,6 +4,8 @@ import android.content.Context
 import com.amap.api.maps.model.LatLng
 import com.amap.api.navi.AMapNavi
 import com.amap.api.navi.SimpleNaviListener
+import com.amap.api.navi.enums.CameraType
+import com.amap.api.navi.enums.CarEnterCameraStatus
 import com.amap.api.navi.enums.IconType
 import com.amap.api.navi.enums.NaviType
 import com.amap.api.navi.enums.PathPlanningStrategy
@@ -46,7 +48,37 @@ data class NaviState(
     val currentRoad: String = "",
     val speedKmh: Int = 0,
     val limitKmh: Int = 0,
+    /** 区间测速态（null=非区间；仅语音消费——车速环视觉不分区间，见 [SpeedZone]）。 */
+    val speedZone: SpeedZone? = null,
     val arrived: Boolean = false
+)
+
+/**
+ * 区间测速状态（导航态引擎 `updateIntervalCameraInfo` 专用回调驱动；巡航态无此数据，
+ * 为 SDK 硬边界）。车速环视觉**不区分**区间（用户定稿：视觉只保留车速/限速），
+ * 区间语义仅供语音播报与 [NaviState.limitKmh] 路由消费。
+ *
+ * 边界语义（引擎 javadoc + 用户定稿）：
+ * - **中途汇入只扫到出口**（startCamera=null）：无起点基准，区间均值无意义 →
+ *   不建区间态，出口限速降级为普通限速生效；
+ * - **中途驶出**（LEAVE 未走完）：均值/剩余仅覆盖部分路程，保留会误导 → 清除；
+ * - **完整进入**（先 UNENTER 后 ENTER）：均值可信。
+ *
+ * @property limitKmh 区间限速（0=未采集）
+ * @property averageKmh 区间内实时平均速度（-1=未计算或接近态未进入）
+ * @property totalMeters 区间总长（-1=未上报）
+ * @property remainMeters 区间剩余长度（-1=未上报；位置相对终点，客观可信）
+ * @property inside true=已在区间内（ENTER）；false=接近中（UNENTER）
+ * @property fullEntry true=先接近后进入的完整区间（[averageKmh] 可播）；
+ *   中途汇入直接 ENTER 时 SDK 均值跟踪基线偏晚，不可播
+ */
+data class SpeedZone(
+    val limitKmh: Int = 0,
+    val averageKmh: Int = -1,
+    val totalMeters: Int = -1,
+    val remainMeters: Int = -1,
+    val inside: Boolean = false,
+    val fullEntry: Boolean = false,
 )
 
 /** 途经点（含展示名，按加入顺序）。 */
@@ -79,6 +111,15 @@ object NaviSession {
 
     private val _state = MutableStateFlow(NaviState())
     val state: StateFlow<NaviState> = _state
+
+    /** 单点测速限速池（棘轮：无新值保留；区间态期间被区间限速覆盖发布）。 */
+    private var pointLimitKmh = 0
+
+    /** 当前区间测速态（null=非区间；与 [NaviState.speedZone] 同源发布）。 */
+    private var zone: SpeedZone? = null
+
+    /** 本区间经过过接近态（UNENTER）：区分完整进入与中途汇入（均值可信性）。 */
+    private var zoneSawApproach = false
 
     val isActive: Boolean
         get() = navi != null
@@ -495,6 +536,9 @@ object NaviSession {
         navi = null
         naviRunning = false
         _active.value = false
+        pointLimitKmh = 0
+        zone = null
+        zoneSawApproach = false
         _state.value = NaviState()
         _waypoints.value = emptyList()
         // routePoints 置 null 驱动车机 Presentation 重绘，清除常驻地图上的路线残留
@@ -630,9 +674,9 @@ object NaviSession {
             override fun updateIntervalCameraInfo(
                 startCamera: com.amap.api.navi.model.AMapNaviCameraInfo?,
                 endCamera: com.amap.api.navi.model.AMapNaviCameraInfo?,
-                remainDistance: Int
+                status: Int
             ) {
-                updateLimit(if (startCamera != null) arrayOf(startCamera) else null)
+                updateIntervalZone(startCamera, endCamera, status)
             }
 
             override fun onLocationChange(location: AMapNaviLocation?) {
@@ -732,12 +776,73 @@ object NaviSession {
         }
     }
 
-    /** 从电子眼数据提取限速（km/h）。 */
+    /**
+     * 从电子眼数据提取单点限速（km/h）。仅单点测速类型进池（区间类型 8/9 走
+     * [updateIntervalZone] 专用回调管理；无区间态时的终点类型 = 中途汇入扫到的
+     * 出口，其限速仍应生效）。`getCameraSpeed()` 为官方推荐取值——已废弃的
+     * `getSpeed()` 数组仅在区间类型才有值，旧实现单点限速实际取不到。
+     */
     private fun updateLimit(cameras: Array<com.amap.api.navi.model.AMapNaviCameraInfo>?) {
         val limit = cameras
-            ?.firstOrNull { c -> c.speed?.firstOrNull { s -> s > 0 } != null }
-            ?.speed?.firstOrNull { s -> s > 0 } ?: return
-        _state.value = _state.value.copy(limitKmh = limit)
+            ?.firstOrNull { c ->
+                (c.cameraType == CameraType.SPEED ||
+                    (c.cameraType == CameraType.INTERVALVELOCITYEND && zone == null)) &&
+                    c.cameraSpeed > 0
+            }
+            ?.cameraSpeed ?: return
+        pointLimitKmh = limit
+        publishLimit()
+    }
+
+    /**
+     * 区间测速专用回调（引擎 javadoc：第三参为 [CarEnterCameraStatus] 而非距离）。
+     * 边界：中途汇入（startCamera=null）不建区间语义、出口限速降级普通池；
+     * 驶出（LEAVE，含中途驶出）一律清除——部分路程的均值/剩余会误导。
+     */
+    private fun updateIntervalZone(
+        startCamera: com.amap.api.navi.model.AMapNaviCameraInfo?,
+        endCamera: com.amap.api.navi.model.AMapNaviCameraInfo?,
+        status: Int,
+    ) {
+        when {
+            startCamera == null -> {
+                // 中途汇入只扫到出口：无起点基准，区间均值无意义 → 不建区间态
+                clearZone(publish = false)
+                endCamera?.cameraSpeed?.takeIf { it > 0 }?.let { pointLimitKmh = it }
+                publishLimit()
+            }
+            status == CarEnterCameraStatus.LEAVE -> clearZone()
+            status == CarEnterCameraStatus.ENTER || status == CarEnterCameraStatus.UNENTER -> {
+                if (status == CarEnterCameraStatus.UNENTER) zoneSawApproach = true
+                zone = SpeedZone(
+                    limitKmh = startCamera.cameraSpeed.takeIf { it > 0 } ?: 0,
+                    // 均值仅 ENTER 态可能有效；UNENTER 期间引擎未开始跟踪
+                    averageKmh = if (status == CarEnterCameraStatus.ENTER) {
+                        startCamera.averageSpeed.takeIf { it > 0 } ?: -1
+                    } else -1,
+                    totalMeters = startCamera.distance.takeIf { it > 0 } ?: -1,
+                    remainMeters = startCamera.intervalRemainDistance.takeIf { it > 0 } ?: -1,
+                    inside = status == CarEnterCameraStatus.ENTER,
+                    fullEntry = zoneSawApproach,
+                )
+                publishLimit()
+            }
+            else -> clearZone() // UNKNOWN(0)
+        }
+    }
+
+    /** 清除区间态（限速回落单点池）。 */
+    private fun clearZone(publish: Boolean = true) {
+        zone = null
+        zoneSawApproach = false
+        if (publish) publishLimit()
+    }
+
+    /** 生效限速路由：区间激活时用区间限速（车速环超速判定单一值，视觉不区分来源），
+     *  清除后回落单点池；speedZone 随之同源发布。 */
+    private fun publishLimit() {
+        val effective = zone?.limitKmh?.takeIf { it > 0 } ?: pointLimitKmh
+        _state.value = _state.value.copy(limitKmh = effective, speedZone = zone)
     }
 
     /** [IconType] 到中文动作文本。 */
