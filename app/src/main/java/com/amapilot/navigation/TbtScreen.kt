@@ -665,7 +665,7 @@ private fun TurnCard(
                         androidx.compose.animation.core.tween(com.amapilot.ui.theme.GmMotion.DurationShort)
                     )
             ) {
-                // 共用车道行（与车机同实现）：主题色 24dp/44dp + 顶部分割线
+                // 共用车道行（与车机同实现）：主题色 30dp/54dp + 顶部分割线
                 com.amapilot.ui.components.LaneRow(
                     lanes = lanes,
                     active = activeLaneDir(navi.iconType),
@@ -673,8 +673,8 @@ private fun TurnCard(
                     linksToManeuver = navi.linksToManeuver,
                     stepRemainMeters = navi.stepRemainMeters,
                     linkRemainMeters = navi.linkRemainMeters,
-                    iconSize = 24.dp,
-                    separatorHeight = 44.dp,
+                    iconSize = 30.dp,
+                    separatorHeight = 54.dp,
                     accent = ACCENT,
                     inactive = MaterialTheme.colorScheme.onSurfaceVariant,
                     separatorColor = MaterialTheme.colorScheme.outlineVariant,

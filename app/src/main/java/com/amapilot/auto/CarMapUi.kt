@@ -486,13 +486,13 @@ private fun CarTurnCard(
                     linksToManeuver = navi.linksToManeuver,
                     stepRemainMeters = navi.stepRemainMeters,
                     linkRemainMeters = navi.linkRemainMeters,
-                    iconSize = 19.dp,
-                    separatorHeight = 33.dp,
+                    iconSize = 26.dp,
+                    separatorHeight = 46.dp,
                     accent = CarAccent,
                     inactive = c.laneGray,
                     separatorColor = c.laneGray,
                     horizontalPadding = 0.dp,
-                    verticalPadding = 5.dp
+                    verticalPadding = 6.dp
                 )
             }
         }

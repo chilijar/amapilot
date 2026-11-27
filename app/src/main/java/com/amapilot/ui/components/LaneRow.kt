@@ -32,7 +32,8 @@ import com.amapilot.ui.theme.GmIcons
  * 共用车道行（手机 TBT / 车机 CarTurnCard 单一实现）：满宽 SpaceEvenly 居中分布 +
  * 车道间竖分隔线 + 单元格。判定逻辑全部来自
  * [com.amapilot.navigation.LaneDirections]，改一次两侧同步。
- * 两侧只差色板与尺寸（手机 24dp/44dp + 顶分割线，车机 19dp/33dp 紧凑无分割线）。
+ * 两侧只差色板与尺寸（手机 30dp/54dp + 顶分割线，车机 26dp/46dp 紧凑无分割线）；
+ * 箭头粗细随 iconSize 等比（fill 型 Material 剪影杆宽 2/24 viewport）。
  */
 @Composable
 fun LaneRow(

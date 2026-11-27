@@ -10,7 +10,7 @@ import androidx.compose.ui.graphics.vector.group
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
 
-// ---- 车道图标路径（24×24，2.6px 杆，Material 45° 尾翼） ----
+// ---- 车道图标路径（24×24，3px 杆，Material 45° 尾翼） ----
 
 /** 车道方向（组合图标内逐方向着色：需走的方向高亮，其余灰色）。 */
 enum class LaneDir { STRAIGHT, LEFT, RIGHT, UTURN_LEFT, UTURN_RIGHT }
@@ -61,7 +61,8 @@ class LaneIconSpec(val name: String, val parts: List<LanePart>) {
                         pathData = PathParser().parsePathString(p.d).toNodes(),
                         fill = if (p.fill) SolidColor(color) else null,
                         stroke = if (p.stroke) SolidColor(color) else null,
-                        strokeLineWidth = if (p.stroke) 2.6f else 0f,
+                        // stroke 部件杆宽：与 fill 剪影的 2/24 杆视觉等重（3/24 ≈ 剪影+抗锯齿占位）
+                        strokeLineWidth = if (p.stroke) 3f else 0f,
                         strokeLineCap = StrokeCap.Butt,
                         strokeLineJoin = StrokeJoin.Round
                     )
