@@ -79,6 +79,9 @@ object CruiseSession {
     /** 最近一次精定位（gps/fused）时间：活跃期内忽略 network 粗定位 fix。 */
     private var lastFineLocAt = 0L
 
+    /** 限速棘轮锚点（拿到限速值时的坐标；null = 无限速在挂）。 */
+    private var limitAnchor: Pair<Double, Double>? = null
+
     /**
      * 开始巡航（幂等：已进行中则沿用，浏览页 → 全屏移交不重启引擎）。
      * 真机 `startNavi(CRUISE)` 电子眼模式；模拟器被海外权益拦截 → 先算路再 `EMULATOR`。
@@ -122,6 +125,8 @@ object CruiseSession {
                 var prev: Pair<Double, Double>? = null
                 location.collect { loc ->
                     val c = loc?.coord ?: return@collect
+                    // 限速棘轮的过期保护（两路位置汇聚点，见 decayLimitIfStale）
+                    decayLimitIfStale(c.latitude, c.longitude)
                     val now = System.currentTimeMillis()
                     val dt = if (lastAt > 0) (now - lastAt) / 1000.0 else 0.0
                     prev?.let { (pLat, pLng) ->
@@ -219,6 +224,7 @@ object CruiseSession {
         speedFromGps = false
         lastEngineLocAt = 0L
         lastFineLocAt = 0L
+        limitAnchor = null
         aimlessListener = null
         naviListener = null
         navi?.let { n ->
@@ -309,10 +315,37 @@ object CruiseSession {
         val alerts = cameras.orEmpty().map {
             CameraAlert(type = it.type, distanceMeters = it.distance, limitKmh = it.limitSpeed)
         }
+        // 限速棘轮（对齐 NaviSession.updateLimit 语义）：Aimless 回调只含"前方电子眼"，
+        // 经过即从数组消失——若随回调清零，超速变色只在测速点前后短暂闪现（区间
+        // 测速/连续限速路段断档）。无新限速时保留旧值；新值覆盖时更新衰减锚点，
+        // 由 [decayLimitIfStale] 按距离过期。
+        val nextLimit = alerts.firstOrNull { c -> c.limitKmh > 0 }?.limitKmh
+        if (nextLimit != null) {
+            limitAnchor = _location.value?.coord?.let { it.latitude to it.longitude }
+        }
         _state.value = _state.value.copy(
             cameras = alerts,
-            limitKmh = alerts.firstOrNull { c -> c.limitKmh > 0 }?.limitKmh ?: 0
+            limitKmh = nextLimit ?: _state.value.limitKmh
         )
+    }
+
+    /** 限速棘轮的距离衰减：距锚点超过 [LIMIT_DECAY_METERS] 清零，防旧值误挂。
+     *  挂在 [CruiseSession.location] 流汇聚点（引擎+系统 GPS 两路位置都经过）。 */
+    private fun decayLimitIfStale(lat: Double, lng: Double) {
+        if (_state.value.limitKmh <= 0) {
+            limitAnchor = null
+            return
+        }
+        val anchor = limitAnchor
+        if (anchor == null) {
+            // 限速先于首个位置到达（罕见窗口）：首位置补锚
+            limitAnchor = lat to lng
+            return
+        }
+        if (haversineMeters(anchor.first, anchor.second, lat, lng) > LIMIT_DECAY_METERS) {
+            limitAnchor = null
+            _state.value = _state.value.copy(limitKmh = 0)
+        }
     }
 
     /** 引擎位置流停更判定（毫秒）：超过即由系统 GPS 兜底驱动 `_location`。 */
@@ -323,6 +356,13 @@ object CruiseSession {
 
     /** fix 新鲜度判定（纳秒）：超过此龄的 fix（seed 回放的 lastKnown）不参与车速。 */
     private const val SPEED_FRESH_NS = 3_000_000_000L
+
+    /**
+     * 限速棘轮的过期保护（米）：距拿到限速值的锚点超过此距离即清零。Aimless 回调
+     * 只含前方电子眼（无路段限速流），棘轮若永不失效会把限速路段的值误挂到无限速
+     * 道路（超速红环误报）。5km ≈ 电子眼提示的典型作用范围。
+     */
+    private const val LIMIT_DECAY_METERS = 5000.0
 
     /** 系统 FUSED provider 名（`LocationManager.FUSED_PROVIDER` 为 API 31+ 常量，字面量全版本安全）。 */
     private const val FUSED_PROVIDER = "fused"
