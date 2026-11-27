@@ -50,8 +50,8 @@ android {
         applicationId = "com.amapilot"
         minSdk = 26
         targetSdk = 36
-        versionCode = 32
-        versionName = "0.22.0"
+        versionCode = 33
+        versionName = "0.22.1"
         // CI 环境变量优先，本地 local.properties 兜底
         manifestPlaceholders["AMAP_API_KEY"] =
             System.getenv("AMAP_API_KEY") ?: localProperties.getProperty("AMAP_API_KEY") ?: ""
