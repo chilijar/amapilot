@@ -59,11 +59,54 @@ import com.amapilot.navigation.naviDurationText
  * 车速环。**只做展示**：交互走宿主图标，[CarMapControl.handleClick] 为潜在表面
  * 点击通道保留（当前宿主不触发）。
  */
+/** 车机叠加层配色（昼夜双 palette）：accent/路线色两态通用，卡片底与文字随昼夜。
+ *  夜间 = 历史观感（深底浅字）；日间 = 白底深字（对齐底图日间样式）。 */
+private data class CarPalette(
+    /** 卡片/胶囊/pill 底色 */
+    val bg: Color,
+    /** 主文字（动作/路名/车速） */
+    val textPrimary: Color,
+    /** 副文字（沿 X / 距离·ETA） */
+    val textSecondary: Color,
+    /** 车道未高亮箭头/分隔条 */
+    val laneGray: Color,
+    /** 按钮行未选中底（深底=白透、白底=黑透） */
+    val btnIdle: Color,
+    /** 选路备选序号徽标底（Canvas 用 ARGB int） */
+    val badgeBg: Int,
+    /** 徽标数字色（Canvas 用 ARGB int） */
+    val badgeText: Int,
+)
+
 private val CarAccent = Color(0xFF4EA0FF)
-private val CardBg = Color(0xF2111114)
-private val TextPrimary = Color(0xFFF4F6FB)
-private val TextSecondary = Color(0xFF9AA3B2)
-private val LaneGray = Color(0xFF6B7280)
+
+private val NightPalette = CarPalette(
+    bg = Color(0xF2111114),
+    textPrimary = Color(0xFFF4F6FB),
+    textSecondary = Color(0xFF9AA3B2),
+    laneGray = Color(0xFF6B7280),
+    btnIdle = Color.White.copy(alpha = 0.14f),
+    badgeBg = 0xF2111114.toInt(),
+    badgeText = 0xFFFFFFFF.toInt(),
+)
+
+private val DayPalette = CarPalette(
+    bg = Color(0xF2FFFFFF),
+    textPrimary = Color(0xFF1F232B),
+    textSecondary = Color(0xFF5B6572),
+    laneGray = Color(0xFF9AA3B2),
+    btnIdle = Color.Black.copy(alpha = 0.08f),
+    badgeBg = 0xF2FFFFFF.toInt(),
+    badgeText = 0xFF1F232B.toInt(),
+)
+
+/** 叠加层配色解析：与底图同源（[CarMapControl.resolvedNight]）；未派发时维持
+ *  夜间观感（车机连接前不闪白）。 */
+@Composable
+private fun carPalette(): CarPalette {
+    val night by CarMapControl.resolvedNight.collectAsState()
+    return if (night ?: true) NightPalette else DayPalette
+}
 
 @Composable
 fun CarMapOverlay(
@@ -119,13 +162,16 @@ fun CarMapOverlay(
     val cardW = g.navCardWidth(m).dp
 
     Box(Modifier.fillMaxSize()) {
+        // 叠加层配色（与底图昼夜同源）
+        val c = carPalette()
+
         // ── 搜索入口 = 宿主 rail 搜索 chip（旋钮/触摸共通道）；此处只留状态 pill ──
 
         // ── 搜索状态 pill（算路中…/搜索中… 反馈；顶部水平居中） ──
         if (searchStatus != null) {
             Surface(
                 shape = RoundedCornerShape(16.dp),
-                color = CardBg,
+                color = c.bg,
                 modifier = Modifier
                     .offset(
                         x = ((m.left + m.right) / 2 - 90).dp,
@@ -137,7 +183,7 @@ fun CarMapOverlay(
                 Box(contentAlignment = Alignment.Center) {
                     Text(
                         searchStatus!!,
-                        color = TextSecondary,
+                        color = c.textSecondary,
                         fontSize = 12.sp,
                         maxLines = 1
                     )
@@ -216,7 +262,7 @@ fun CarMapOverlay(
         ) {
             Surface(
                 shape = RoundedCornerShape(24.dp),
-                color = CardBg,
+                color = c.bg,
                 modifier = Modifier
                     .offset(
                         x = g.overviewPillX(m).dp,
@@ -237,7 +283,7 @@ fun CarMapOverlay(
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(Modifier.width(6.dp))
-                    Text("返回导航视角", color = TextPrimary, fontSize = 13.sp)
+                    Text("返回导航视角", color = c.textPrimary, fontSize = 13.sp)
                 }
             }
         }
@@ -257,6 +303,8 @@ private fun SelectGraphicsLayer() {
     // 相机 tick / 选路版本：读取即订阅 → 变化触发重组重投影
     val camTick by CarMapControl.cameraTick.collectAsState()
     val selVer by CarMapControl.selVersion.collectAsState()
+    // 徽标底/文字随昼夜（与卡片同源；Canvas lambda 里不能调 composable，先捕获）
+    val c = carPalette()
     Canvas(Modifier.fillMaxSize()) {
         val tick = camTick + selVer // 订阅锚点（值本身不参与绘制）
         if (tick < Long.MIN_VALUE / 2) return@Canvas
@@ -322,7 +370,7 @@ private fun SelectGraphicsLayer() {
                 sp.x - d / 2, sp.y - d / 2, sp.x + d / 2, sp.y + d / 2
             )
             val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
-            paint.color = if (o.current) 0xFF4EA0FF.toInt() else 0xF2111114.toInt()
+            paint.color = if (o.current) 0xFF4EA0FF.toInt() else c.badgeBg
             native.drawOval(rect, paint)
             if (!o.current) {
                 paint.color = 0xFF8A93A6.toInt()
@@ -331,7 +379,8 @@ private fun SelectGraphicsLayer() {
                 native.drawOval(rect, paint)
             }
             paint.style = android.graphics.Paint.Style.FILL
-            paint.color = 0xFFFFFFFF.toInt()
+            // 选中徽标 = 蓝底白字（两态恒定）；备选徽标随昼夜（白底深字/深底白字）
+            paint.color = if (o.current) 0xFFFFFFFF.toInt() else c.badgeText
             paint.textSize = 22f * density
             paint.typeface = android.graphics.Typeface.DEFAULT_BOLD
             val t = "$num"
@@ -341,13 +390,14 @@ private fun SelectGraphicsLayer() {
     }
 }
 
-/** 导航按钮行单钮（深色圆角方块 + 白色图标，与卡片同风格）。 */
+/** 导航按钮行单钮（圆形底 + accent 图标，与卡片同风格、随昼夜）。 */
 @Composable
 private fun NavActionButton(
     painter: androidx.compose.ui.graphics.painter.Painter,
     key: String,
     active: Boolean = false,
 ) {
+    val c = carPalette()
     // 旋钮/宿主 chip 选中同步高亮（按下点亮 600ms）；[active] = 模式态常亮
     val flash by CarMapControl.actionFlash.collectAsState()
     val lit = flash == key || active
@@ -355,7 +405,7 @@ private fun NavActionButton(
     Surface(
         shape = androidx.compose.foundation.shape.CircleShape,
         color = if (lit) CarAccent.copy(alpha = 0.22f)
-        else androidx.compose.ui.graphics.Color.White.copy(alpha = 0.14f),
+        else c.btnIdle,
         border = androidx.compose.foundation.BorderStroke(
             if (lit) 2.dp else 0.dp,
             if (lit) CarAccent else androidx.compose.ui.graphics.Color.Transparent
@@ -366,7 +416,7 @@ private fun NavActionButton(
             Icon(
                 painter,
                 contentDescription = null,
-                tint = if (lit) CarAccent else TextPrimary,
+                tint = if (lit) CarAccent else c.textPrimary,
                 modifier = Modifier.size(22.dp)
             )
         }
@@ -381,9 +431,10 @@ private fun CarTurnCard(
     cardWidth: Dp,
     modifier: Modifier = Modifier,
 ) {
+    val c = carPalette()
     Surface(
         shape = RoundedCornerShape(20.dp),
-        color = CardBg,
+        color = c.bg,
         // 与路程卡同宽同左缘（Google 式上下对齐）
         modifier = modifier.width(cardWidth)
     ) {
@@ -407,7 +458,7 @@ private fun CarTurnCard(
                     navi.maneuverLine()?.let { line ->
                         Text(
                             text = line,
-                            color = TextPrimary,
+                            color = c.textPrimary,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1
@@ -416,7 +467,7 @@ private fun CarTurnCard(
                     navi.alongLine()?.let { along ->
                         Text(
                             text = along,
-                            color = TextSecondary,
+                            color = c.textSecondary,
                             fontSize = 12.sp,
                             maxLines = 1
                         )
@@ -438,8 +489,8 @@ private fun CarTurnCard(
                     iconSize = 19.dp,
                     separatorHeight = 33.dp,
                     accent = CarAccent,
-                    inactive = LaneGray,
-                    separatorColor = LaneGray,
+                    inactive = c.laneGray,
+                    separatorColor = c.laneGray,
                     horizontalPadding = 0.dp,
                     verticalPadding = 5.dp
                 )
@@ -462,9 +513,10 @@ private fun CarNaviCard(
     btnGap: Dp,
     modifier: Modifier = Modifier,
 ) {
+    val c = carPalette()
     Surface(
         shape = RoundedCornerShape(18.dp),
-        color = CardBg,
+        color = c.bg,
         modifier = modifier.size(cardWidth, cardHeight)
     ) {
         Column(
@@ -488,7 +540,7 @@ private fun CarNaviCard(
                 Text(
                     text = "${naviDistanceText(navi.routeRemainMeters)} · " +
                         formatCarEta(navi.routeRemainSeconds),
-                    color = TextSecondary,
+                    color = c.textSecondary,
                     fontSize = 12.sp
                 )
             }
@@ -521,18 +573,20 @@ private fun formatCarEta(remainSeconds: Int): String {
 }
 
 /** 车机车速环 = 共用 [com.amapilot.ui.components.SpeedRing] 的车机配色封装：
- *  深色配色（尺寸同源 [CarUiGeometry.SPEED_BADGE_SIZE]）+ 限速文字行，超速分档变色。 */
+ *  尺寸同源 [CarUiGeometry.SPEED_BADGE_SIZE]；底/文字随昼夜（与卡片同源），
+ *  超限速文字行 accent 色，超速分档变色。 */
 @Composable
 private fun CarSpeedBadge(speedKmh: Int, limitKmh: Int, modifier: Modifier = Modifier) {
+    val c = carPalette()
     com.amapilot.ui.components.SpeedRing(
         speedKmh = speedKmh,
         limitKmh = limitKmh,
         modifier = modifier,
         size = CarUiGeometry.SPEED_BADGE_SIZE.dp,
         ringColor = CarAccent,
-        bgColor = CardBg,
-        textColor = TextPrimary,
-        subTextColor = TextSecondary,
+        bgColor = c.bg,
+        textColor = c.textPrimary,
+        subTextColor = c.textSecondary,
         speedFontSize = 20.sp,
         unitFontSize = 8.sp,
         limitLabel = if (limitKmh > 0) {

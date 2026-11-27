@@ -228,6 +228,13 @@ object CarMapControl {
     /** 昼夜设置变更 tick（设置页切换后全局重应用底图样式）。 */
     val dayNightTick = kotlinx.coroutines.flow.MutableStateFlow(0)
 
+    /**
+     * [resolveNight] 的解析结果流（null = 尚未解析）：底图样式与叠加层卡片配色
+     * 的**单一昼夜源**——[CarMapDisplay.applyMapDayNight] 每次重算时落点于此，
+     * 保证卡片与底图永不同步漂移。
+     */
+    val resolvedNight = kotlinx.coroutines.flow.MutableStateFlow<Boolean?>(null)
+
     /** 昼夜解析优先级：设置覆盖（白天/夜间）> 车连时车辆态 > 手机系统 uiMode。 */
     fun resolveNight(context: android.content.Context): Boolean =
         when (com.amapilot.settings.Prefs.dayNightMode(context)) {
@@ -882,11 +889,14 @@ class CarMapPresentation(outerContext: Context, display: android.view.Display) :
         if (!searchExpandedState.value) CarSearchRelay.reset()
     }
 
-    /** 底图昼夜样式跟随（车辆态/系统/设置，见 [CarMapControl.resolveNight]）。 */
+    /** 底图昼夜样式跟随（车辆态/系统/设置，见 [CarMapControl.resolveNight]）。
+     *  解析结果同时落 [CarMapControl.resolvedNight]，叠加层卡片配色同源消费。 */
     private fun applyMapDayNight() {
+        val night = CarMapControl.resolveNight(context)
+        CarMapControl.resolvedNight.value = night
         runCatching {
             val map = aMap ?: return
-            map.mapType = if (CarMapControl.resolveNight(context)) {
+            map.mapType = if (night) {
                 com.amap.api.maps.AMap.MAP_TYPE_NIGHT
             } else {
                 com.amap.api.maps.AMap.MAP_TYPE_NORMAL
